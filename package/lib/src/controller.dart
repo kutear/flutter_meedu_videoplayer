@@ -1,15 +1,16 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_meedu/meedu.dart';
+import 'package:flutter_meedu_videoplayer/meedu_player.dart';
 import 'package:flutter_meedu_videoplayer/src/native/pip_manager.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_meedu_videoplayer/meedu_player.dart';
+import 'package:universal_platform/universal_platform.dart';
 import 'package:volume_controller/volume_controller.dart';
 import 'package:wakelock/wakelock.dart';
-import 'package:universal_platform/universal_platform.dart';
 
 /// An enumeration of the different styles that can be applied to controls, such
 /// as buttons and icons and layouts.
@@ -246,6 +247,18 @@ class MeeduPlayerController {
 
   final EnabledOverlays enabledOverlays;
 
+
+  /// Set this to true to keep playing video in background, when app goes in background.
+  /// The default value is false.
+  final bool allowBackgroundPlayback;
+
+  /// Set this to true to mix the video players audio with other audio sources.
+  /// The default value is false
+  ///
+  /// Note: This option will be silently ignored in the web platform (there is
+  /// currently no way to implement this feature in this platform).
+  final bool mixWithOthers;
+
   /// creates an instance of [MeeduPlayerController]
   ///
   /// [screenManager] the device orientations and overlays
@@ -282,6 +295,8 @@ class MeeduPlayerController {
     Responsive? responsive,
     this.durations = const Durations(),
     this.onVideoPlayerClosed,
+    this.mixWithOthers = false,
+    this.allowBackgroundPlayback = false
   }) {
     if (responsive != null) {
       this.responsive = responsive;
@@ -347,11 +362,16 @@ class MeeduPlayerController {
   VideoPlayerController _createVideoController(DataSource dataSource) {
     VideoPlayerController tmp; // create a new video controller
     //dataSource = await checkIfm3u8AndNoLinks(dataSource);
+    final options = VideoPlayerOptions(
+      mixWithOthers: mixWithOthers,
+      allowBackgroundPlayback: allowBackgroundPlayback
+    );
     if (dataSource.type == DataSourceType.asset) {
       tmp = VideoPlayerController.asset(
         dataSource.source!,
         closedCaptionFile: dataSource.closedCaptionFile,
         package: dataSource.package,
+        videoPlayerOptions: options,
       );
     } else if (dataSource.type == DataSourceType.network) {
       tmp = VideoPlayerController.network(
@@ -359,12 +379,14 @@ class MeeduPlayerController {
         formatHint: dataSource.formatHint,
         closedCaptionFile: dataSource.closedCaptionFile,
         httpHeaders: dataSource.httpHeaders ?? {},
+        videoPlayerOptions: options,
       );
     } else {
       tmp = VideoPlayerController.file(
         dataSource.file!,
         closedCaptionFile: dataSource.closedCaptionFile,
         httpHeaders: dataSource.httpHeaders ?? {},
+        videoPlayerOptions: options,
       );
     }
     return tmp;

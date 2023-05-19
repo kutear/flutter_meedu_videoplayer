@@ -259,34 +259,37 @@ class _ControlsContainerState extends State<ControlsContainer> {
       if (_.enabledOverlays.volume)
         RxBuilder(
           //observables: [_.volume],
-          (__) => AnimatedOpacity(
-            duration: _.durations.volumeOverlayDuration,
-            opacity: _.showVolumeStatus.value ? 1 : 0,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                margin: const EdgeInsets.all(10),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: SizedBox(
-                    height: widget.responsive.height / 2,
-                    width: 35,
-                    child: Stack(
-                      alignment: AlignmentDirectional.bottomCenter,
-                      children: [
-                        Container(color: Colors.black38),
-                        Container(
-                          height: _.volume.value * widget.responsive.height / 2,
-                          color: Colors.blue,
-                        ),
-                        Container(
-                            padding: const EdgeInsets.all(5),
-                            child: const Icon(
-                              Icons.music_note,
-                              color: Colors.white,
-                            )),
-                      ],
+              (__) => IgnorePointer(
+            ignoring: !_.showVolumeStatus.value,
+            child: AnimatedOpacity(
+              duration: _.durations.volumeOverlayDuration,
+              opacity: _.showVolumeStatus.value ? 1 : 0,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  margin: const EdgeInsets.all(48),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: SizedBox(
+                      height: widget.responsive.height / 2,
+                      width: 35,
+                      child: Stack(
+                        alignment: AlignmentDirectional.bottomCenter,
+                        children: [
+                          Container(color: Colors.black38),
+                          Container(
+                            height: _.volume.value * widget.responsive.height / 2,
+                            color: Colors.blue,
+                          ),
+                          Container(
+                              padding: const EdgeInsets.all(5),
+                              child: const Icon(
+                                Icons.music_note,
+                                color: Colors.white,
+                              )),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -297,35 +300,38 @@ class _ControlsContainerState extends State<ControlsContainer> {
       if (_.enabledOverlays.brightness)
         RxBuilder(
           //observables: [_.volume],
-          (__) => AnimatedOpacity(
-            duration: _.durations.brightnessOverlayDuration,
-            opacity: _.showBrightnessStatus.value ? 1 : 0,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                margin: const EdgeInsets.all(10),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: SizedBox(
-                    height: widget.responsive.height / 2,
-                    width: 35,
-                    child: Stack(
-                      alignment: AlignmentDirectional.bottomCenter,
-                      children: [
-                        Container(color: Colors.black38),
-                        Container(
-                          height:
-                              _.brightness.value * widget.responsive.height / 2,
-                          color: Colors.blue,
-                        ),
-                        Container(
-                            padding: const EdgeInsets.all(5),
-                            child: const Icon(
-                              Icons.wb_sunny,
-                              color: Colors.white,
-                            )),
-                      ],
+              (__) => IgnorePointer(
+            ignoring: !_.showBrightnessStatus.value,
+            child: AnimatedOpacity(
+              duration: _.durations.brightnessOverlayDuration,
+              opacity: _.showBrightnessStatus.value ? 1 : 0,
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  margin: const EdgeInsets.all(48),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: SizedBox(
+                      height: widget.responsive.height / 2,
+                      width: 35,
+                      child: Stack(
+                        alignment: AlignmentDirectional.bottomCenter,
+                        children: [
+                          Container(color: Colors.black38),
+                          Container(
+                            height:
+                            _.brightness.value * widget.responsive.height / 2,
+                            color: Colors.blue,
+                          ),
+                          Container(
+                              padding: const EdgeInsets.all(5),
+                              child: const Icon(
+                                Icons.wb_sunny,
+                                color: Colors.white,
+                              )),
+                        ],
+                      ),
                     ),
                   ),
                 ),

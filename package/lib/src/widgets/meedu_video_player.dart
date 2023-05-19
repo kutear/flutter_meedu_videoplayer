@@ -3,6 +3,7 @@ import 'package:flutter_meedu_videoplayer/meedu_player.dart';
 import 'package:flutter_meedu_videoplayer/src/widgets/styles/controls_container.dart';
 import 'package:flutter_meedu_videoplayer/src/widgets/styles/primary/primary_player_controls.dart';
 import 'package:flutter_meedu_videoplayer/src/widgets/styles/secondary/secondary_player_controls.dart';
+
 import '../helpers/shortcuts/intent_action_map.dart';
 
 /// An ActionDispatcher that logs all the actions that it invokes.
@@ -22,6 +23,7 @@ class LoggingActionDispatcher extends ActionDispatcher {
 
 class MeeduVideoPlayer extends StatefulWidget {
   final MeeduPlayerController controller;
+  final WidgetBuilder? videoMaskBuilder;
 
   final Widget Function(
     BuildContext context,
@@ -46,13 +48,14 @@ class MeeduVideoPlayer extends StatefulWidget {
     Responsive responsive,
   )? customControls;
 
-  const MeeduVideoPlayer(
-      {Key? key,
-      required this.controller,
-      this.header,
-      this.bottomRight,
-      this.customIcons,
-      this.customControls})
+  const MeeduVideoPlayer({Key? key,
+    required this.controller,
+    this.header,
+    this.bottomRight,
+    this.customIcons,
+    this.customControls,
+    this.videoMaskBuilder,
+  })
       : super(key: key);
 
   @override
@@ -164,6 +167,8 @@ class _MeeduVideoPlayerState extends State<MeeduVideoPlayer> {
                             ),
                           );
                         }),
+                        if(widget.videoMaskBuilder != null)
+                          widget.videoMaskBuilder!.call(context),
                         ClosedCaptionView(responsive: _.responsive),
                         if (_.controlsEnabled &&
                             _.controlsStyle == ControlsStyle.primary)
