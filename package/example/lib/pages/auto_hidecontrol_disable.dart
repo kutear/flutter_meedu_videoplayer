@@ -1,20 +1,21 @@
 import 'dart:async';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_meedu_videoplayer/meedu_player.dart';
 import 'package:universal_platform/universal_platform.dart';
 
-class BasicExamplePage extends StatefulWidget {
-  const BasicExamplePage({Key? key}) : super(key: key);
+class AutoHideControlsDisable extends StatefulWidget {
+  const AutoHideControlsDisable({Key? key}) : super(key: key);
 
   @override
-  State<BasicExamplePage> createState() => _BasicExamplePageState();
+  State<AutoHideControlsDisable> createState() =>
+      _AutoHideControlsDisableState();
 }
 
-class _BasicExamplePageState extends State<BasicExamplePage> {
+class _AutoHideControlsDisableState extends State<AutoHideControlsDisable> {
   final _meeduPlayerController = MeeduPlayerController(
     controlsStyle: ControlsStyle.primary,
+    autoHideControls: false,
     // enabledButtons: const EnabledButtons(pip: true),
     // enabledControls: const EnabledControls(doubleTapToSeek: false),
     // pipEnabled: true,
@@ -81,13 +82,6 @@ class _BasicExamplePageState extends State<BasicExamplePage> {
           aspectRatio: 16 / 9,
           child: MeeduVideoPlayer(
             controller: _meeduPlayerController,
-            // videoOverlay: (context, controller, responsive) => Container(
-            //   color: Colors.red,
-            //   child: SizedBox(
-            //     height: 50,
-            //     width: 50,
-            //   ),
-            // ),
             header: (context, controller, responsive) => header,
           ),
         ),

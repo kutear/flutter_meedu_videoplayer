@@ -2,17 +2,23 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_meedu_videoplayer/meedu_player.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/auto_fullscreen_on_rotation.dart';
+import 'package:flutter_meedu_videoplayer_example/pages/auto_hidecontrol_disable.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/basic_example_page.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/basic_example_with_looping_page.dart';
+import 'package:flutter_meedu_videoplayer_example/pages/basic_lock_controls_example_page.dart';
+import 'package:flutter_meedu_videoplayer_example/pages/basic_pip_example_page.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/change_quality_example_page.dart';
+import 'package:flutter_meedu_videoplayer_example/pages/custom_background.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/custom_controls.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/custom_icon_size.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/custom_icons_example.dart';
+import 'package:flutter_meedu_videoplayer_example/pages/custom_subtitles.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/disabled_buttons_example_page.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/fullscreen_example_page.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/gridview_example.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/listview_example.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/m3u8_page_example.dart';
+import 'package:flutter_meedu_videoplayer_example/pages/multi_subtitles.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/network_with_subtitle_page.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/one_page_to_other_page_example.dart';
 import 'package:flutter_meedu_videoplayer_example/pages/only_gestures_example_page.dart';
@@ -24,7 +30,10 @@ import 'package:flutter_meedu_videoplayer_example/pages/secondary_controls.dart'
 import 'package:flutter_meedu_videoplayer_example/pages/yotube_page_example.dart';
 
 void main() {
-  initMeeduPlayer();
+  initMeeduPlayer(
+    androidUseMediaKit: true,
+    iosUseMediaKit: true,
+  );
   runApp(const MyApp());
 }
 
@@ -34,17 +43,23 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       home: const HomePage(),
       routes: {
         "basic": (_) => const BasicExamplePage(),
+        "basic_pip": (_) => const BasicPipExamplePage(),
+        "basic_lock": (_) => const BasicLockControlsExamplePage(),
         "basic_with_looping": (_) => const BasicExampleWithLoopingPage(),
         "only_gestures": (_) => const OnlyGesturesExamplePage(),
         "secondary_controls": (_) => const SecondaryExamplePage(),
         "custom_controls": (_) => const CustomControlsExamplePage(),
         "custom_sizes": (_) => const CustomSizesExamplePage(),
+        "custom_background": (_) => const CustomBackgroundPage(),
         "fullscreen": (_) => const FullscreenExamplePage(),
         "with-header": (_) => const PlayerWithHeaderPage(),
         "subtitles": (_) => const NetworkWithSubtitlesPage(),
+        "custom-subtitles": (_) => const CustomNetworkWithSubtitlesPage(),
+        "multi-subtitles": (_) => const NetworkWithMultipleSubtitlesPage(),
         "playback-speed": (_) => const PlayBackSpeedExamplePage(),
         "quality-change": (_) => const ChangeQualityExamplePage(),
         "one-page-to-other": (_) => const OnePageExample(),
@@ -57,6 +72,7 @@ class MyApp extends StatelessWidget {
         "youtube": (_) => const YoutubeExamplePage(),
         "m3u8": (_) => const M3u8ExamplePage(),
         "auto_fullscreen": (_) => const AutoFullScreenExamplePage(),
+        "auto_hide_control_disable": (_) => const AutoHideControlsDisable(),
       },
     );
   }
@@ -108,6 +124,19 @@ class _HomePageState extends State<HomePage> {
                     ),
                     buildButton(
                       context,
+                      text: 'Basic Pip Network example',
+                      routeName: 'basic_pip',
+                      description:
+                          'An example of how to load a video from a network source.',
+                    ),
+                    buildButton(
+                      context,
+                      text: 'Basic lock Network example',
+                      routeName: 'basic_lock',
+                      description: 'An example of which you can lock controls.',
+                    ),
+                    buildButton(
+                      context,
                       text: 'Basic Network example with looping',
                       routeName: 'basic_with_looping',
                       description:
@@ -120,6 +149,14 @@ class _HomePageState extends State<HomePage> {
                       routeName: 'only_gestures',
                       description:
                           'An example of how to load a video from a network source without rewind and forward buttons.',
+                    ),
+                    buildButton(
+                      context,
+                      text:
+                          'Basic example with auto hiding of controls set as false',
+                      routeName: 'auto_hide_control_disable',
+                      description:
+                          'An example of how to load a video from a network source with the player not auto hiding controls.',
                     ),
                     buildButton(
                       context,
@@ -141,6 +178,13 @@ class _HomePageState extends State<HomePage> {
                       routeName: 'custom_sizes',
                       description:
                           'An example of how to Customize icon and buttons and font sizes for the player.',
+                    ),
+                    buildButton(
+                      context,
+                      text: 'Custom background',
+                      routeName: 'custom_background',
+                      description:
+                          'An example of how to Customize player background color.',
                     ),
                   ],
                 ),
@@ -181,6 +225,20 @@ class _HomePageState extends State<HomePage> {
                     ),
                     buildButton(
                       context,
+                      text: 'Custom subtitles view example',
+                      routeName: 'custom-subtitles',
+                      description:
+                          'An example of how to add custom view for subtitles to the player.',
+                    ),
+                    buildButton(
+                      context,
+                      text: 'With multiple subtitles example',
+                      routeName: 'multi-subtitles',
+                      description:
+                          'An example of how to add multiple subtitles to the player.',
+                    ),
+                    buildButton(
+                      context,
                       text: 'Playback speed example',
                       routeName: 'playback-speed',
                       description:
@@ -203,16 +261,17 @@ class _HomePageState extends State<HomePage> {
                     kIsWeb
                         ? buildDisabledButton(
                             context,
-                            text: "Pick file Example doesn't work on web",
+                            text:
+                                "Pick or drop file Example doesn't work on web",
                             description:
                                 'This example is not available on web due to restrictions.',
                           )
                         : buildButton(
                             context,
-                            text: 'Pick file',
+                            text: 'Pick or drop file',
                             routeName: 'pick-file',
                             description:
-                                'An example of how to pick a video file from the device storage.',
+                                'An example of how to pick or drop a video file from the device storage.',
                           ),
                     buildButton(
                       context,

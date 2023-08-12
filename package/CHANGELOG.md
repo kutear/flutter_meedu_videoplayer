@@ -1,3 +1,61 @@
+## 4.2.24
+* Added videoOverlay to help with wrapping widget in both normal and fullScreen
+## 4.2.23
+* Updates to `video_player_media_kit 0.0.23` to use latest version of media_kit, also allows disabling media_kit playback errors
+## 4.2.22
+* Updates to `video_player_media_kit 0.0.22` to fix errors when playing live streams
+## 4.2.21
+* Updating readme versions
+## 4.2.20
+* Updates to `video_player_media_kit 0.0.21` to fix web compilation
+## 4.2.19
+* improved windows closing full screen 
+## 4.2.18
+* fixes macos fullscreen crash
+## 4.2.17
+* Updates to `video_player_media_kit 0.0.20`
+* migrate to wakelock_plus
+## 4.2.16
+* Web fix black screen after closing full screen
+* fix web pause when closing full screen
+## 4.2.15
+* MeeduVideoPlayer can take background color, which gets passed to media_kit widget too
+## 4.2.14
+* Updating packages (video_player,window_manager,video_player_media_kit)
+* Fix Custom caption view (to be contestant when full screen or not)
+* Fix weird slider look when video is short
+* Removed initWindowManagerIfNeeded from initMeeduPlayer, so it can be used separately
+
+## 4.2.13
+* autoHideControls: can be disabled thanks to [sommye-ctr](https://github.com/sommye-ctr)
+* seek will get recalled if failed to seek.
+* instead of debug prints, now its logs with the package name
+
+## 4.2.12+1
+* fixed readme
+## 4.2.12
+* Updates to `video_player_media_kit 0.0.16`
+* Fixes seeking issue
+* Removed flickering of buffering when using media_kit
+* Fixes position slider hiding when changing position
+* Added support for multi subtitles and example
+  * setClosedCaptionFile
+  * setCaptionOffset
+* Added custom subtitle view support and example 
+* Fixes errors happening at the end of the video
+* Fixes buffering indicator flickering when playing high quality video
+* Only log media_kit errors to avoid catching handled errors.
+* initMeeduPlayer can set media_kit logs level
+* MeeduVideoPlayer closedCaptionDistanceFromBottom to be able to set subtitles position
+* Custom callback for on long press start and end
+* Fixes ios orientation
+* Fixes back button not working
+* Adding on long press speed up video in controls
+* Feature mobile UI lock [0Franky](https://github.com/0Franky)
+* Feature desktop pip [0Franky](https://github.com/0Franky)
+* Add ControlsStyle.primaryList for scrollable list [ADAIN](https://github.com/ADAIN)
+* Added topics
+
 ## 4.2.10
 * Improving the controls by showing overlays on top of the controls.
 * Fixes controls disappearing while clicking.

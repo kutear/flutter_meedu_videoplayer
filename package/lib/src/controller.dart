@@ -1,21 +1,33 @@
 import 'dart:async';
+import 'dart:developer' as dev;
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_meedu/meedu.dart';
+import 'package:flutter_meedu_videoplayer/src/helpers/desktop_pip_bk.dart';
 import 'package:flutter_meedu_videoplayer/meedu_player.dart';
 import 'package:flutter_meedu_videoplayer/src/native/pip_manager.dart';
+import 'package:flutter_meedu_videoplayer/src/video_player_used.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_platform/universal_platform.dart';
 import 'package:volume_controller/volume_controller.dart';
-import 'package:wakelock/wakelock.dart';
+import 'package:universal_platform/universal_platform.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:window_manager/window_manager.dart';
 
 /// An enumeration of the different styles that can be applied to controls, such
 /// as buttons and icons and layouts.
 enum ControlsStyle {
   primary,
+
+  /// When a video is inserted into a scrollable list, the scroll functionality
+  /// is disabled due to the drag event.
+  /// To address this, I added a style to the default controller to allow scrolling.
+  /// prevent drag event for scrollable list
+  primaryList,
   secondary,
 
   /// The custom style is used to apply a custom style which you can provide in MeeduPlayerController.
@@ -51,7 +63,11 @@ class MeeduPlayerController {
   final bool controlsEnabled;
   String? _errorText;
   String? get errorText => _errorText;
-  Widget? loadingWidget, header, bottomRight, customControls;
+  Widget? loadingWidget, header, bottomRight, customControls, videoOverlay;
+
+  ///[customCaptionView] when a custom view for the captions is needed
+  Widget Function(BuildContext context, MeeduPlayerController controller,
+      Responsive responsive, String text)? customCaptionView;
   final ControlsStyle controlsStyle;
   final bool pipEnabled;
 
@@ -80,10 +96,14 @@ class MeeduPlayerController {
   Rx<bool> bufferingVideoDuration = false.obs;
 
   Rx<bool> videoFitChanged = false.obs;
-  final Rx<BoxFit> _videoFit = Rx(BoxFit.fill);
+  final Rx<BoxFit> _videoFit;
+
+  final Rx<bool> forceUIRefreshAfterFullScreen = false.obs;
+
   //Rx<double> scale = 1.0.obs;
   Rx<bool> rewindIcons = false.obs;
   Rx<bool> forwardIcons = false.obs;
+
   // NO OBSERVABLES
   bool _isSliderMoving = false;
   bool _looping = false;
@@ -92,6 +112,8 @@ class MeeduPlayerController {
   double mouseMoveInitial = 0;
   Timer? _timer;
   Timer? _timerForSeek;
+  Timer? _timerForCheckingSeek;
+
   Timer? _timerForVolume;
   Timer? _timerForShowingVolume;
   Timer? _timerForGettingVolume;
@@ -195,6 +217,12 @@ class MeeduPlayerController {
   /// for defining that video player needs mobile controls (even if its running on a web on a mobile device)
   bool mobileControls = false;
 
+  /// for defining that video player locked controls
+  final Rx<bool> _lockedControls = false.obs;
+
+  /// if the player should automatically hide the controls
+  final bool autoHideControls;
+
   /// controls if widgets inside videoplayer should get focus or not
   final bool excludeFocus;
 
@@ -218,6 +246,9 @@ class MeeduPlayerController {
 
   SharedPreferences? prefs;
 
+  DesktopPipBk? _desktopPipBk;
+  Size? _screenSizeBk;
+
   // returns the os version
   Future<double> get osVersion async {
     return _pipManager.osVersion;
@@ -228,6 +259,9 @@ class MeeduPlayerController {
 
   /// return fit of the Video,By default it is set to [BoxFit.contain]
   Rx<BoxFit> get videoFit => _videoFit;
+
+  /// returns true if the pip mode can used on the current device, the initial value will be false after check if pip is available
+  Rx<bool> get lockedControls => _lockedControls;
 
   /// A utility class that helps make the UI responsive by defining the size of
   /// icons, buttons, and text relative to the screen size.
@@ -240,11 +274,20 @@ class MeeduPlayerController {
   ///  this.buttonsSizeRelativeToScreen = 8,
   ///  this.maxButtonsSize = 40,
   ///});
-
   Responsive responsive = Responsive();
 
+  /// Defines the animation durations for various animations in a video.
+  ///
+  /// This class allows you to customize the duration of animations within the video player,
+  /// such as fade-in and fade-out durations, overlay show/hide animations, and more.
+  /// By modifying these durations, you can adjust the visual appearance and behavior
+  /// of the video player's animations according to your preferences.
   final Durations durations;
 
+  /// Controls the visibility of player overlays.
+  ///
+  /// Use this class to enable or disable the visibility of player overlays, such as
+  /// volume and brightness.
   final EnabledOverlays enabledOverlays;
 
 
@@ -259,6 +302,12 @@ class MeeduPlayerController {
   /// currently no way to implement this feature in this platform).
   final bool mixWithOthers;
 
+  /// Provides custom callback functions for specific player interactions.
+  ///
+  /// This class allows you to specify custom callback functions for player
+  /// interactions, such as long press events
+  final CustomCallbacks customCallbacks;
+
   /// creates an instance of [MeeduPlayerController]
   ///
   /// [screenManager] the device orientations and overlays
@@ -272,9 +321,9 @@ class MeeduPlayerController {
     this.controlsEnabled = true,
     this.manageWakeLock = true,
     this.manageBrightness = true,
-    //TODOOOOOOO:
     this.showLogs = true,
     this.excludeFocus = true,
+    this.autoHideControls = true,
     String? errorText,
     this.controlsStyle = ControlsStyle.primary,
     this.header,
@@ -292,12 +341,14 @@ class MeeduPlayerController {
     this.enabledButtons = const EnabledButtons(),
     this.enabledControls = const EnabledControls(),
     this.enabledOverlays = const EnabledOverlays(),
+    this.customCallbacks = const CustomCallbacks(),
     Responsive? responsive,
     this.durations = const Durations(),
     this.onVideoPlayerClosed,
     this.mixWithOthers = false,
-    this.allowBackgroundPlayback = false
-  }) {
+    this.allowBackgroundPlayback = false,
+    BoxFit? initialFit,
+  }) : _videoFit = Rx(initialFit ?? BoxFit.fill) {
     if (responsive != null) {
       this.responsive = responsive;
     }
@@ -305,7 +356,10 @@ class MeeduPlayerController {
     if (!manageBrightness) {
       enabledControls = enabledControls.copyWith(brightnessSwipes: false);
     }
-    getUserPreferenceForFit();
+
+    if (initialFit == null) {
+      getUserPreferenceForFit();
+    }
 
     _errorText = errorText;
     tag = DateTime.now().microsecondsSinceEpoch.toString();
@@ -335,26 +389,29 @@ class MeeduPlayerController {
     _playerEventSubs = onPlayerStatusChanged.listen(
       (PlayerStatus status) {
         if (status == PlayerStatus.playing) {
-          if (manageWakeLock && !UniversalPlatform.isLinux) {
-            Wakelock.enable();
+          if (manageWakeLock) {
+            WakelockPlus.enable();
           }
         } else {
-          if (manageWakeLock && !UniversalPlatform.isLinux) {
-            Wakelock.disable();
+          if (manageWakeLock) {
+            WakelockPlus.disable();
           }
         }
       },
     );
 
-    if (pipEnabled && UniversalPlatform.isAndroid) {
-      // get the OS version and check if pip is available
-      _pipManager.checkPipAvailable().then(
-            (value) => _pipAvailable.value = value,
-          );
-      // listen the pip mode changes
-      _pipModeWorker = _pipManager.isInPipMode.ever(_onPipModeChanged);
-    } else {
-      _pipAvailable.value = false;
+    _pipAvailable.value = false;
+    if (pipEnabled) {
+      if (UniversalPlatform.isAndroid) {
+        // get the OS version and check if pip is available
+        _pipManager.checkPipAvailable().then(
+              (value) => _pipAvailable.value = value,
+            );
+        // listen the pip mode changes
+        _pipModeWorker = _pipManager.isInPipMode.ever(_onPipModeChanged);
+      } else if (UniversalPlatform.isDesktop) {
+        _pipAvailable.value = true;
+      }
     }
   }
 
@@ -374,8 +431,8 @@ class MeeduPlayerController {
         videoPlayerOptions: options,
       );
     } else if (dataSource.type == DataSourceType.network) {
-      tmp = VideoPlayerController.network(
-        dataSource.source!,
+      tmp = VideoPlayerController.networkUrl(
+        Uri.parse(dataSource.source!),
         formatHint: dataSource.formatHint,
         closedCaptionFile: dataSource.closedCaptionFile,
         httpHeaders: dataSource.httpHeaders ?? {},
@@ -394,7 +451,7 @@ class MeeduPlayerController {
 
   void customDebugPrint(Object? object) {
     if (showLogs) {
-      print(object);
+      dev.log(object.toString(), name: "flutter_meedu_videoplayer");
     }
   }
 
@@ -403,7 +460,7 @@ class MeeduPlayerController {
     Duration seekTo = Duration.zero,
   }) async {
     if (seekTo != Duration.zero) {
-      customDebugPrint("Called seek function to$seekTo");
+      customDebugPrint("Called seek function to $seekTo");
       await this.seekTo(seekTo);
     }
 
@@ -438,10 +495,24 @@ class MeeduPlayerController {
 
     if (buffered.isNotEmpty) {
       _buffered.value = buffered;
-      isBuffering.value =
-          value.isPlaying && position.inSeconds >= buffered.last.end.inSeconds;
-      bufferedPercent.value =
-          buffered.last.end.inSeconds / duration.value.inSeconds;
+
+      // Calculate the end time of the last buffered segment
+      final lastBufferedEnd = buffered.last.end.inSeconds;
+
+      // Check if the video is playing and the position is near the end of the buffer
+      if (VideoPlayerUsed.mediaKit) {
+        isBuffering.value =
+            value.isPlaying && position.inSeconds > (lastBufferedEnd);
+      } else {
+        isBuffering.value =
+            value.isPlaying && position.inSeconds >= (lastBufferedEnd);
+      }
+      //respect the native is buffering flag
+      isBuffering.value = isBuffering.value || value.isBuffering;
+
+      // Calculate the buffered percentage relative to the total video duration
+      // Update the buffered percentage value
+      bufferedPercent.value = lastBufferedEnd / duration.value.inSeconds;
     }
 
     // save the volume value
@@ -524,7 +595,7 @@ class MeeduPlayerController {
 
     playerStatus.status.value = PlayerStatus.playing;
     // screenManager.setOverlays(false);
-    if (hideControls) {
+    if (hideControls && autoHideControls) {
       _hideTaskControls();
     }
     //
@@ -557,30 +628,62 @@ class MeeduPlayerController {
     }
     _position.value = position;
     customDebugPrint(
+        "position in seek function is ${_position.value.toString()}");
+    customDebugPrint(
         "duration in seek function is ${duration.value.toString()}");
+
     if (duration.value.inSeconds != 0) {
+      customDebugPrint(
+          "video controller duration ${_videoPlayerController!.value.duration.toString()}");
+
       await _videoPlayerController?.seekTo(position);
+      customDebugPrint("position after seek is ${_position.value.toString()}");
+
+      _checkIfSeekIsSuccess(position);
 
       // if (playerStatus.stopped) {
       //   play();
       // }
     } else {
-      _timerForSeek?.cancel();
-      _timerForSeek =
-          Timer.periodic(const Duration(milliseconds: 200), (Timer t) async {
-        //_timerForSeek = null;
-        customDebugPrint("SEEK CALLED");
-        if (duration.value.inSeconds != 0) {
-          await _videoPlayerController?.seekTo(position);
-
-          // if (playerStatus.stopped) {
-          //   play();
-          // }
-          t.cancel();
-          //_timerForSeek = null;
-        }
-      });
+      _timerForReSeek(position);
     }
+  }
+
+  void _checkIfSeekIsSuccess(Duration position) {
+    _timerForCheckingSeek?.cancel();
+    _timerForCheckingSeek =
+        Timer.periodic(const Duration(milliseconds: 500), (Timer t) async {
+      // customDebugPrint("_position.value: ${_position.value}");
+      // customDebugPrint("position: $position");
+      customDebugPrint(
+          "re seek needed?: ${_position.value.inSeconds < position.inSeconds}");
+
+      if (_position.value.inSeconds < position.inSeconds) {
+        _timerForReSeek(position);
+      }
+      if (_position.value.inSeconds != position.inSeconds ||
+          playerStatus.paused) {
+        t.cancel();
+      }
+    });
+  }
+
+  void _timerForReSeek(Duration position) async {
+    _timerForSeek?.cancel();
+    _timerForSeek =
+        Timer.periodic(const Duration(milliseconds: 200), (Timer t) async {
+      //_timerForSeek = null;
+      customDebugPrint("Re SEEK CALLED");
+      if (duration.value.inSeconds != 0) {
+        await _videoPlayerController?.seekTo(position);
+
+        // if (playerStatus.stopped) {
+        //   play();
+        // }
+        t.cancel();
+        //_timerForSeek = null;
+      }
+    });
   }
 
   /// Sets the playback speed of [this].
@@ -624,10 +727,12 @@ class MeeduPlayerController {
 
   void onChangedSliderStart() {
     _isSliderMoving = true;
+    controls = true;
   }
 
   onChangedSlider(double v) {
-    _sliderPosition.value = Duration(seconds: v.floor());
+    _sliderPosition.value = Duration(milliseconds: v.floor());
+    controls = true;
   }
 
   void onChangedSliderEnd() {
@@ -746,6 +851,10 @@ class MeeduPlayerController {
 
   /// show or hide the player controls
   set controls(bool visible) {
+    // if (!UniversalPlatform.isDesktopOrWeb && visible && lockedControls.value) {
+    //   return;
+    // }
+
     // customDebugPrint("controls called with value $visible");
     if (fullscreen.value) {
       //customDebugPrint("Closed");
@@ -754,8 +863,14 @@ class MeeduPlayerController {
     //customDebugPrint(visible);
     _showControls.value = visible;
     _timer?.cancel();
-    if (visible) {
+    if (visible && autoHideControls) {
       _hideTaskControls();
+    }
+  }
+
+  void toggleLockScreenMobile() {
+    if (!UniversalPlatform.isDesktopOrWeb) {
+      _lockedControls.value = !_lockedControls.value;
     }
   }
 
@@ -782,12 +897,23 @@ class MeeduPlayerController {
         screenManager.setWebFullScreen(true, this);
       } else {
         if (desktopOrWeb) {
+          if (!isInPipMode.value) {
+            _screenSizeBk = await windowManager.getSize();
+          }
           screenManager.setWindowsFullScreen(true, this);
         } else {
           screenManager.setFullScreenOverlaysAndOrientations();
         }
       }
     }
+    setVideoAsAppFullScreen(context,
+        applyOverlaysAndOrientations: applyOverlaysAndOrientations,
+        disposePlayer: disposePlayer);
+  }
+
+  Future<void> setVideoAsAppFullScreen(BuildContext context,
+      {bool applyOverlaysAndOrientations = true,
+      bool disposePlayer = false}) async {
     _fullscreen.value = true;
 
     final route = PageRouteBuilder(
@@ -801,7 +927,7 @@ class MeeduPlayerController {
       },
     );
 
-    await Navigator.push(context, route);
+    await Navigator.of(context).push(route);
   }
 
   /// launch a video using the fullscreen apge
@@ -841,6 +967,7 @@ class MeeduPlayerController {
     _timerForGettingVolume?.cancel();
     timerForTrackingMouse?.cancel();
     _timerForSeek?.cancel();
+    _timerForCheckingSeek?.cancel();
     videoFitChangedTimer?.cancel();
     _pipModeWorker?.dispose();
     _position.close();
@@ -926,7 +1053,9 @@ class MeeduPlayerController {
           }
         }
       } else {
-        Navigator.pop(context);
+        if (this.fullscreen.value) {
+          Navigator.pop(context);
+        }
       }
     }
   }
@@ -952,6 +1081,33 @@ class MeeduPlayerController {
   /// Change Video Fit accordingly
   void onVideoFitChange(BoxFit fit) {
     _videoFit.value = fit;
+  }
+
+  ///Sets a closed caption file.
+  ///If [closedCaptionFile] is null, closed captions will be removed.
+  void setClosedCaptionFile(Future<ClosedCaptionFile>? closedCaptionFile) {
+    if (videoPlayerController == null) {
+      customDebugPrint("setClosedCaptionFile: videoPlayerController is null");
+      return;
+    }
+    videoPlayerController!.setClosedCaptionFile(closedCaptionFile);
+  }
+
+  /// Sets the caption offset.
+  ///
+  /// The [offset] will be used when getting the correct caption for a specific position.
+  /// The [offset] can be positive or negative.
+  ///
+  /// The values will be handled as follows:
+  /// *  0: This is the default behavior. No offset will be applied.
+  /// * >0: The caption will have a negative offset. So you will get caption text from the past.
+  /// * <0: The caption will have a positive offset. So you will get caption text from the future.
+  void setCaptionOffset(Duration offset) {
+    if (videoPlayerController == null) {
+      customDebugPrint("setCaptionOffset: videoPlayerController is null");
+      return;
+    }
+    videoPlayerController!.setCaptionOffset(offset);
   }
 
   /// enter to picture in picture mode only Android
@@ -989,7 +1145,7 @@ class MeeduPlayerController {
   void _onPipModeChanged(bool isInPipMode) {
     // if the pip mode was closed and before enter to pip mode the player was not in fullscreen
     if (!isInPipMode && _pipContextToFullscreen != null) {
-      Navigator.pop(_pipContextToFullscreen!); // close the fullscreen
+      Navigator.maybePop(_pipContextToFullscreen!); // close the fullscreen
       _pipContextToFullscreen = null;
     }
   }*/
@@ -1018,13 +1174,14 @@ class MeeduPlayerController {
     _timerForGettingVolume?.cancel();
     timerForTrackingMouse?.cancel();
     _timerForSeek?.cancel();
+    _timerForCheckingSeek?.cancel();
     videoFitChangedTimer?.cancel();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _position.value = Duration.zero;
       _timer?.cancel();
       pause();
-      if (manageWakeLock && !UniversalPlatform.isLinux) {
-        Wakelock.disable();
+      if (manageWakeLock) {
+        WakelockPlus.disable();
       }
 
       _videoPlayerController?.removeListener(_listener);
@@ -1041,19 +1198,69 @@ class MeeduPlayerController {
     });
   }
 
+  double getAspectRatio() {
+    if (_videoPlayerController == null) {
+      return 16 / 9;
+    }
+    return _videoPlayerController!.value.size.width /
+        _videoPlayerController!.value.size.height;
+  }
+
   /// enter to picture in picture mode only Android
   ///
   /// only available since Android 7
   Future<void> enterPip(BuildContext context) async {
     if (pipAvailable.value && pipEnabled) {
-      controls = false; // hide the controls
-      if (!fullscreen.value) {
-        // if the player is not in the fullscreen mode
-        _pipContextToFullscreen = context;
-        goToFullscreen(context, applyOverlaysAndOrientations: false);
+      if (UniversalPlatform.isAndroid) {
+        await _enterPipAndroid(context);
+      } else if (UniversalPlatform.isDesktop) {
+        await _enterPipDesktop(context);
       }
-      await _pipManager.enterPip();
     }
+  }
+
+  Future<void> _enterPipAndroid(BuildContext context) async {
+    controls = false; // hide the controls
+    if (!fullscreen.value) {
+      // if the player is not in the fullscreen mode
+      _pipContextToFullscreen = context;
+      goToFullscreen(context, applyOverlaysAndOrientations: false);
+    }
+    await _pipManager.enterPip();
+  }
+
+  Future<void> _enterPipDesktop(BuildContext context) async {
+    if (_videoPlayerController == null) return;
+    if (!fullscreen.value) {
+      setVideoAsAppFullScreen(context);
+    }
+    double minH = max(MediaQuery.of(context).size.height * 0.15, 200);
+    double defaultH = max(MediaQuery.of(context).size.height * 0.30, 400);
+
+    double aspectRatio = getAspectRatio();
+    _desktopPipBk = DesktopPipBk(
+      isFullScreen: await windowManager.isFullScreen(),
+      size: await windowManager.isFullScreen()
+          ? (_screenSizeBk ??
+              Size(
+                MediaQuery.of(context).size.width / 2,
+                MediaQuery.of(context).size.height / 2,
+              ))
+          : await windowManager.getSize(),
+    );
+
+    await onFullscreenClose();
+    // ignore: use_build_context_synchronously
+
+    await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+    await windowManager.center(animate: true);
+    await windowManager.setAlwaysOnTop(true);
+    await windowManager.setMinimumSize(Size(minH * (aspectRatio), minH));
+    await windowManager.setSize(Size(defaultH * (aspectRatio), defaultH));
+    // await windowManager.setAsFrameless();
+    await windowManager.setAspectRatio(aspectRatio);
+    // windowManager.setSkipTaskbar(true);
+    _pipManager.isInPipMode.value = true;
   }
 
   /// listener for pip changes
@@ -1063,6 +1270,38 @@ class MeeduPlayerController {
       Navigator.pop(_pipContextToFullscreen!); // close the fullscreen
       _pipContextToFullscreen = null;
     }
+  }
+
+  void closePip(BuildContext context) {
+    if (_pipManager.isInPipMode.value == true) {
+      if (UniversalPlatform.isDesktop) {
+        if (!_desktopPipBk!.isFullScreen) {
+          // ignore: use_build_context_synchronously
+          Navigator.of(context).pop();
+        }
+
+        _closePipDesktop(context);
+      }
+    }
+  }
+
+  Future<void> _closePipDesktop(BuildContext context) async {
+    double defaultSizeHeight =
+        max(MediaQuery.of(context).size.height * 0.30, 300);
+    double defaultSizeWidth =
+        max(MediaQuery.of(context).size.width * 0.30, 500);
+
+    await windowManager.setTitleBarStyle(TitleBarStyle.normal);
+    await windowManager.setAlwaysOnTop(false);
+    await windowManager.setAspectRatio(0);
+    // // windowManager.setSkipTaskbar(false);
+    await windowManager.setSize(_desktopPipBk!.size);
+    await windowManager
+        .setMinimumSize(Size(defaultSizeWidth, defaultSizeHeight));
+    if (_desktopPipBk!.isFullScreen) {
+      screenManager.setWindowsFullScreen(true, this);
+    }
+    _pipManager.isInPipMode.value = false;
   }
 
   static MeeduPlayerController of(BuildContext context) {
